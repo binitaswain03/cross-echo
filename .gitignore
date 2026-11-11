@@ -1,0 +1,33 @@
+# Environments
+venv/
+env/
+.env
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Databases
+*.db
+*.sqlite3
+
+# Large model weights
+*.pt
+*.pth
+*.weights
+yolov8n.pt
+
+# Datasets
+dataset/
+images/
+*.csv
+*.xlsx
+
+# IDEs and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CrossEcho{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-alert {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <div class="dashboard-wrapper">
+        <aside class="dashboard-sidebar">
+            <div class="sidebar-brand">
+                <div class="logo-icon">CE</div>
+                <div class="brand-name">CrossEcho</div>
+            </div>
+            
+            <ul class="sidebar-menu" role="navigation" aria-label="Main Navigation">
+                <li class="menu-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('main.dashboard') }}" data-speech="Dashboard page, press D or click to view statistics" aria-label="Dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</a>
+                </li>
+                <li class="menu-item {% if request.endpoint == 'main.detection' %}active{% endif %}">
+                    <a href="{{ url_for('main.detection') }}" data-speech="Live Camera Navigation, press N or click to start spatial obstacle detection" aria-label="Live Camera Navigation"><i data-lucide="scan-eye"></i> Live Navigation</a>
+                </li>
+            </ul>
+            
+            <div style="padding: 1.5rem; border-top: 1px solid var(--border-light); margin-top: auto;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="logo-icon" style="border-radius: 50%; width: 32px; height: 32px; font-size: 0.8rem;">
+                        {{ current_user.username[:2].upper() }}
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem;" id="dashboard-username">{{ current_user.username }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">Operator</div>
+                    </div>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" data-speech="Log out of CrossEcho" class="btn btn-secondary" style="width: 100%; justify-content: center; color: var(--color-danger); border-color: rgba(239, 68, 68, 0.2);">
+                    <i data-lucide="log-out"></i> Logout
+                </a>
+            </div>
+        </aside>
+        
+        <main class="dashboard-main">
+            <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--border-light); padding-bottom: 1.5rem;">
+                <h1 style="font-size: 1.8rem; margin-bottom: 0.25rem;">{% block page_heading %}{% endblock %}</h1>
+                <p class="text-muted">{% block page_subheading %}{% endblock %}</p>
+            </header>
+            
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+        {% block content_no_sidebar %}{% endblock %}
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/voice_assistant.js') }}"></script>
+    <script>
+        lucide.createIcons();
+        
+        // Auto-dismiss flash messages
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.flash-alert');
+            alerts.forEach(alert => {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 300);
+            });
+        }, 4000);
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

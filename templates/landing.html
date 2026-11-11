@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}CrossEcho - Premium Assistive Navigation{% endblock %}
+
+{% block content_no_sidebar %}
+<!-- Voice Start Overlay -->
+<div id="voice-start-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 17, 26, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; backdrop-filter: blur(10px); transition: opacity 0.5s ease;">
+    <i data-lucide="mic" style="width: 64px; height: 64px; color: var(--color-primary); margin-bottom: 2rem;"></i>
+    <h2 style="font-size: 2.5rem; color: white; margin-bottom: 1rem;">Welcome to CrossEcho</h2>
+    <p style="font-size: 1.25rem; color: var(--text-muted);">Click anywhere or press Space to start voice navigation</p>
+</div>
+
+<header style="padding: 1.5rem 3rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); background: rgba(15, 17, 26, 0.8); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div class="logo-icon">CE</div>
+        <div class="brand-name">CrossEcho</div>
+    </div>
+    <nav style="display: flex; gap: 1rem;">
+        {% if is_logged_in %}
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+        {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">Sign In</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Get Started</a>
+        {% endif %}
+    </nav>
+</header>
+
+<main style="max-width: 1200px; margin: 0 auto; padding: 6rem 2rem; text-align: center;">
+    <div style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 50px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: var(--color-primary); font-weight: 600; font-size: 0.85rem; margin-bottom: 2rem;">
+        <i data-lucide="zap" size="16"></i> Next-Gen Spatial Intelligence
+    </div>
+    
+    <h1 style="font-size: 4.5rem; margin-bottom: 1.5rem; letter-spacing: -0.02em;">
+        Navigate with <br><span class="text-gradient">Auditory Vision.</span>
+    </h1>
+    
+    <p style="font-size: 1.25rem; color: var(--text-muted); max-width: 700px; margin: 0 auto 3rem; line-height: 1.6;">
+        CrossEcho transforms real-time video feeds into intuitive 3D soundscapes, empowering the visually impaired with unparalleled environmental awareness using cutting-edge AI.
+    </p>
+    
+    <div style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 5rem;">
+        {% if not is_logged_in %}
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                Start Exploring Free
+            </a>
+        {% endif %}
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; text-align: left;">
+        <div class="glass-panel">
+            <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(59, 130, 246, 0.1); color: var(--color-primary); display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                <i data-lucide="eye"></i>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-bottom: 0.75rem;">YOLOv8 Detection</h3>
+            <p class="text-muted" style="line-height: 1.5;">Real-time identification of obstacles, vehicles, and pedestrians with ultra-low latency.</p>
+        </div>
+        
+        <div class="glass-panel">
+            <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(139, 92, 246, 0.1); color: var(--color-secondary); display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                <i data-lucide="layers"></i>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-bottom: 0.75rem;">MiDaS Depth Estimation</h3>
+            <p class="text-muted" style="line-height: 1.5;">Advanced stereoscopic distance calculation maps the 3D space directly from a 2D webcam.</p>
+        </div>
+        
+        <div class="glass-panel">
+            <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); color: var(--color-success); display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                <i data-lucide="headphones"></i>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-bottom: 0.75rem;">Spatial Audio Priority</h3>
+            <p class="text-muted" style="line-height: 1.5;">Intelligent audio cueing prioritizes critical threats (e.g., cars) over background clutter.</p>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const synth = window.speechSynthesis;
+    let voiceModeActive = false;
+    
+    // Setup Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript.trim().toLowerCase();
+            handleVoiceInput(transcript);
+        };
+        
+        recognition.onerror = function(event) {
+            console.error("Speech recognition error:", event.error);
+            if (event.error === 'not-allowed') {
+                speak("Microphone access is blocked. This feature requires permission and a secure connection.");
+                voiceModeActive = false;
+                return;
+            }
+            if (voiceModeActive && event.error !== 'no-speech') {
+                speak("I didn't catch that. Please try again.", () => {
+                    try { recognition.start(); } catch(e) {}
+                });
+            }
+        };
+    }
+
+    function speak(text, onEndCallback = null) {
+        if (synth.speaking) {
+            synth.cancel();
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.1; 
+        utterance.pitch = 1.0;
+        if (onEndCallback) {
+            utterance.onend = onEndCallback;
+        }
+        synth.speak(utterance);
+    }
+
+    const startOverlay = document.getElementById('voice-start-overlay');
+    
+    function initVoiceMode() {
+        if (!startOverlay) return;
+        startOverlay.style.opacity = '0';
+        setTimeout(() => startOverlay.style.display = 'none', 500);
+        
+        if (!recognition) {
+            speak("Speech recognition is not supported in this browser. Press Tab to navigate manually.");
+            return;
+        }
+        
+        voiceModeActive = true;
+        speak("Welcome to Cross Echo. Say 'login' to sign in, or 'register' to sign up.", () => {
+            try { recognition.start(); } catch(e) {}
+        });
+    }
+
+    if (startOverlay) {
+        startOverlay.addEventListener('click', initVoiceMode);
+    }
+
+    // Fallback: Restart voice on Spacebar if it stopped or to start initially
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            if (startOverlay && startOverlay.style.display !== 'none') {
+                initVoiceMode();
+            } else if (recognition) {
+                voiceModeActive = true;
+                speak("Listening. Say 'login' or 'register'.", () => {
+                    try { recognition.start(); } catch(e) {}
+                });
+            }
+        }
+    });
+    
+    function handleVoiceInput(text) {
+        if (text.includes('sign in') || text.includes('login')) {
+            speak("Opening sign in page.", () => {
+                window.location.href = "{{ url_for('auth.login') }}?voice=true";
+            });
+        } else if (text.includes('sign up') || text.includes('register')) {
+            speak("Opening registration page.", () => {
+                window.location.href = "{{ url_for('auth.register') }}?voice=true";
+            });
+        } else {
+            speak("I didn't understand. Say 'login' or 'register'.", () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        }
+    }
+</script>
+{% endblock %}

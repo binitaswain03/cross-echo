@@ -1,0 +1,545 @@
+{% extends 'base.html' %}
+{% block title %}Live Navigation HUD - CrossEcho{% endblock %}
+{% block page_heading %}Spatial Mapping & Navigation HUD{% endblock %}
+{% block page_subheading %}Real-time YOLOv8 object detection, monocular depth estimation & auditory guidance active.{% endblock %}
+
+{% block content %}
+<!-- Accessibility & Voice Guidance Toolbar -->
+<section class="voice-toolbar" aria-label="Audio Guidance & Accessibility Controls">
+    <div class="voice-toolbar-left">
+        <div class="voice-status-badge" id="voice-guide-status" aria-live="polite">
+            <span class="pulse-dot"></span>
+            <span id="voice-guide-text">Voice Alert Engine Active</span>
+        </div>
+        <button id="btn-toggle-voice-guide" class="btn btn-secondary" onclick="window.CrossEchoVoice.toggleVoice()" aria-label="Toggle Voice Assistant (Shortcut: M)" data-speech="Toggle voice guidance. Press M.">
+            <i id="voice-guide-btn-icon" data-lucide="volume-2"></i>
+            <span id="voice-guide-btn-text">Voice Guide: Active</span>
+        </button>
+        <button class="btn btn-secondary" onclick="window.CrossEchoVoice.readPageSummary()" aria-label="Read Current HUD Status Aloud (Shortcut: S)" data-speech="Read current HUD tracking status. Press S.">
+            <i data-lucide="speech"></i>
+            <span>Status Summary (S)</span>
+        </button>
+        <!-- Voice Commands Microphone Toggle -->
+        <button id="btn-toggle-mic" class="btn btn-secondary voice-mic-btn" onclick="window.CrossEchoVoice.toggleSpeechRecognition()" aria-label="Toggle Voice Commands (Shortcut: V)" data-speech="Toggle microphone voice commands. Press V.">
+            <i id="mic-btn-icon" data-lucide="mic"></i>
+            <span id="mic-btn-text">Voice Commands: ON</span>
+        </button>
+        <!-- Feedback Pill showing recognized voice command -->
+        <div id="voice-command-pill" class="voice-command-pill" style="display: none;" role="status" aria-live="assertive">
+            <i data-lucide="mic" size="14"></i>
+            <span id="voice-command-heard">Listening...</span>
+        </div>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
+            <i data-lucide="keyboard" size="14" style="vertical-align: middle;"></i> Shortcuts: [Space] Cam | [V] Mic | [C] Switch Cam | [L] Lang | [M] Mute | [D] Dash
+        </span>
+    </div>
+</section>
+
+<div class="glass-panel" style="padding: 1.5rem;" role="region" aria-label="Live Camera Navigation Viewport">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <h3 style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.25rem; margin: 0;">
+                <i data-lucide="video" style="color: var(--color-primary);"></i> Camera Feed
+            </h3>
+            
+            <!-- Camera Device Selector -->
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="camera-select" style="font-size: 0.85rem; color: var(--text-muted);"><i data-lucide="camera" size="14"></i> Device:</label>
+                <select id="camera-select" class="form-control" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem; background: rgba(0,0,0,0.4);" aria-label="Select Camera Device">
+                    <option value="">Default Camera</option>
+                </select>
+            </div>
+            
+            <!-- Language Selector (English, Hindi, Odia) -->
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="language-select" style="font-size: 0.85rem; color: var(--text-muted);"><i data-lucide="languages" size="14"></i> Audio:</label>
+                <select id="language-select" class="form-control language-select" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem; background: rgba(0,0,0,0.5); border: 1px solid var(--border-light); color: #38bdf8; font-weight: 600; border-radius: 8px;" onchange="window.CrossEchoVoice.setLanguage(this.value)" aria-label="Select Voice Guidance Language">
+                    <option value="en">English (Default)</option>
+                    <option value="hi">हिन्दी (Hindi)</option>
+                    <option value="or">ଓଡ଼ିଆ (Odia)</option>
+                </select>
+            </div>
+
+            <!-- Accuracy / Confidence Sensitivity -->
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="conf-slider" style="font-size: 0.85rem; color: var(--text-muted);"><i data-lucide="sliders" size="14"></i> Sensitivity:</label>
+                <input type="range" id="conf-slider" min="0.15" max="0.70" step="0.05" value="0.25" style="width: 80px; accent-color: var(--color-primary);" aria-label="Detection Confidence Cutoff">
+                <span id="conf-val" style="font-size: 0.8rem; font-family: var(--font-mono); color: #38bdf8;">25%</span>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem;">
+            <button id="btn-start" class="btn btn-primary" data-speech="Start camera navigation. Press Space to activate." aria-label="Start Camera Navigation (Shortcut: Space)">
+                <i data-lucide="play"></i> <span>Start Navigation (Space)</span>
+            </button>
+            <button id="btn-stop" class="btn btn-danger" style="display: none;" data-speech="Stop camera navigation. Press Space to deactivate." aria-label="Stop Camera Navigation (Shortcut: Space)">
+                <i data-lucide="square"></i> <span>Stop Stream</span>
+            </button>
+        </div>
+    </div>
+    
+    <div class="webcam-container" id="viewport-container" role="img" aria-label="Camera Video Display with HUD overlay">
+        <!-- Live smooth video feed -->
+        <video id="webcam" autoplay playsinline muted></video>
+        <!-- Transparent Canvas Overlay for bounding boxes & crosshairs -->
+        <canvas id="output-canvas" class="detection-overlay"></canvas>
+        
+        <div class="hud-stats">
+            <div><span style="color: var(--text-muted);">LATENCY:</span> <span id="val-latency">0ms</span></div>
+            <div><span style="color: var(--text-muted);">FPS:</span> <span id="fps-counter">0</span></div>
+            <div><span style="color: var(--text-muted);">OBJECTS:</span> <span id="obj-counter" style="color: #38bdf8; font-weight: 700;">0</span></div>
+        </div>
+        
+        <!-- Center crosshair -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0.4;">
+            <i data-lucide="crosshair" style="color: var(--color-primary); width: 44px; height: 44px;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Event Log & Speech Panel -->
+<div class="glass-panel" style="margin-top: 1.5rem; padding: 1.5rem;" role="region" aria-label="Live Auditory Event Log">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <h3 style="font-size: 1.1rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <i data-lucide="activity" style="color: var(--color-success);" size="16"></i> Real-Time Auditory Navigation Log
+        </h3>
+        <span style="font-size: 0.8rem; color: var(--text-dark); font-family: var(--font-mono);">VOICE ENGINE CONNECTED</span>
+    </div>
+    <div id="event-log" style="font-family: var(--font-mono); font-size: 0.88rem; color: #a7f3d0; height: 130px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid var(--border-light);" role="log" aria-live="polite">
+        <div>System standby. Press [Start Navigation] or tap Space to begin spatial mapping.</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('output-canvas');
+    const ctx = canvas.getContext('2d');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const fpsCounter = document.getElementById('fps-counter');
+    const objCounter = document.getElementById('obj-counter');
+    const valLatency = document.getElementById('val-latency');
+    const eventLog = document.getElementById('event-log');
+    const cameraSelect = document.getElementById('camera-select');
+    const confSlider = document.getElementById('conf-slider');
+    const confVal = document.getElementById('conf-val');
+    
+    // Dedicated offscreen canvas for high-quality snapshot extraction
+    const captureCanvas = document.createElement('canvas');
+    const captureCtx = captureCanvas.getContext('2d');
+    
+    let stream = null;
+    let isDetecting = false;
+    let lastFrameTime = performance.now();
+    let frameCounter = 0;
+    let fpsTimer = null;
+    let inferenceInProgress = false;
+    let selectedDeviceId = null;
+    
+    // Slider update
+    confSlider.addEventListener('input', (e) => {
+        confVal.textContent = Math.round(e.target.value * 100) + '%';
+    });
+
+    // Populate camera devices
+    async function loadCameraDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            cameraSelect.innerHTML = '<option value="">Default Camera</option>';
+            videoDevices.forEach((d, idx) => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.textContent = d.label || `Camera ${idx + 1}`;
+                cameraSelect.appendChild(opt);
+            });
+        } catch (e) {
+            console.debug("Could not enumerate devices:", e);
+        }
+    }
+    loadCameraDevices();
+
+    cameraSelect.addEventListener('change', () => {
+        selectedDeviceId = cameraSelect.value || null;
+        if (isDetecting) {
+            stopCamera();
+            startCamera();
+        }
+    });
+
+    function logEvent(msg, isWarning=false, isDanger=false) {
+        const div = document.createElement('div');
+        const time = new Date().toLocaleTimeString();
+        div.textContent = `[${time}] ${msg}`;
+        if (isDanger) {
+            div.style.color = '#f87171';
+            div.style.fontWeight = '700';
+        } else if (isWarning) {
+            div.style.color = '#fbbf24';
+        }
+        eventLog.prepend(div);
+        if (eventLog.children.length > 25) eventLog.lastChild.remove();
+    }
+    
+    async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            let errMsg = "Camera API (mediaDevices) not available. ";
+            if (!window.isSecureContext && !isLocal) {
+                errMsg += "Browsers require a Secure Context (HTTPS or http://localhost:5000). You are accessing via an insecure HTTP network address.";
+            } else {
+                errMsg += "Your browser does not support or has blocked camera media devices.";
+            }
+            logEvent(errMsg, true, true);
+            window.CrossEchoVoice.speak("Camera API unavailable. Please open via localhost or enable HTTPS.", { flush: true, priority: 'urgent' });
+            window.CrossEchoVoice.playChime('danger');
+            return;
+        }
+
+        try {
+            // Flexible constraints with ideal settings instead of strict minimums
+            let constraints;
+            if (selectedDeviceId) {
+                constraints = {
+                    video: {
+                        deviceId: { exact: selectedDeviceId },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+            } else {
+                constraints = {
+                    video: {
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (constraintErr) {
+                console.warn("Primary constraints failed, falling back to basic camera feed:", constraintErr);
+                // Fallback to simple video constraint in case facingMode or resolution was overconstrained
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            }
+
+            video.srcObject = stream;
+
+            // Wait for metadata to be ready to avoid play/listener race conditions
+            await new Promise((resolve) => {
+                if (video.readyState >= 1) {
+                    resolve();
+                } else {
+                    video.onloadedmetadata = () => resolve();
+                    // Fallback timeout in case event already fired or is delayed
+                    setTimeout(resolve, 800);
+                }
+            });
+
+            await video.play();
+
+            const vidW = video.videoWidth || 640;
+            const vidH = video.videoHeight || 480;
+            canvas.width = vidW;
+            canvas.height = vidH;
+            captureCanvas.width = vidW;
+            captureCanvas.height = vidH;
+            
+            isDetecting = true;
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'inline-flex';
+            
+            window.CrossEchoVoice.playChime('welcome');
+            window.CrossEchoVoice.speak("Camera stream connected. AI spatial navigation active.", { flush: true, priority: 'urgent' });
+            logEvent("Camera connected successfully. Spatial AI processing active.");
+            
+            // Start FPS meter
+            if (fpsTimer) clearInterval(fpsTimer);
+            fpsTimer = setInterval(() => {
+                fpsCounter.textContent = frameCounter;
+                frameCounter = 0;
+            }, 1000);
+            
+            // Re-enumerate to show real device labels now that permission is granted
+            loadCameraDevices();
+            
+            processInferenceLoop();
+        } catch (err) {
+            console.error("Camera access error:", err);
+            let spokenMsg = "Could not access camera. Please allow camera permissions in your browser.";
+            let logMsg = "Camera access error: " + (err.message || err.name);
+
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                spokenMsg = "Camera permission was denied. Please allow camera access in your browser address bar.";
+                logMsg = "PERMISSION DENIED: Browser blocked camera access. Click the camera/lock icon in your browser URL bar and choose 'Allow'.";
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                spokenMsg = "No camera found. Please connect a webcam.";
+                logMsg = "NO CAMERA FOUND: No webcam hardware detected on this device.";
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                spokenMsg = "Camera is already in use by another application. Please close Zoom, Teams, or other apps using the camera.";
+                logMsg = "CAMERA IN USE: Hardware is locked by another program (e.g. Zoom, Teams, Discord, or another browser window).";
+            } else if (err.name === 'OverconstrainedError') {
+                spokenMsg = "Camera does not support requested settings.";
+                logMsg = "OVERCONSTRAINED: Camera cannot satisfy requested resolution or device constraints.";
+            }
+
+            logEvent(logMsg, true, true);
+            window.CrossEchoVoice.speak(spokenMsg, { flush: true, priority: 'urgent' });
+            window.CrossEchoVoice.playChime('danger');
+        }
+    }
+    
+    function stopCamera() {
+        isDetecting = false;
+        inferenceInProgress = false;
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        video.srcObject = null;
+        if (fpsTimer) clearInterval(fpsTimer);
+        
+        btnStart.style.display = 'inline-flex';
+        btnStop.style.display = 'none';
+        fpsCounter.textContent = '0';
+        objCounter.textContent = '0';
+        valLatency.textContent = '0ms';
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        logEvent("Camera stream stopped.");
+        window.CrossEchoVoice.speak("Camera navigation stopped.", { flush: true, priority: 'urgent' });
+    }
+    
+    async function processInferenceLoop() {
+        if (!isDetecting) return;
+        
+        if (video.readyState >= 2 && !inferenceInProgress) {
+            inferenceInProgress = true;
+            const startTime = performance.now();
+            
+            // Draw current video frame to hidden capture canvas
+            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // High quality JPEG (0.85) to ensure sharp bounding edges for YOLO & MiDaS
+            const imgData = captureCanvas.toDataURL('image/jpeg', 0.85);
+            const confThreshold = parseFloat(confSlider.value || '0.35');
+            
+            const currentLang = window.CrossEchoVoice.currentLanguage || 'en';
+
+            try {
+                const response = await fetch('/api/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        image: imgData,
+                        conf_threshold: confThreshold,
+                        language: currentLang
+                    })
+                });
+                
+                const result = await response.json();
+                const latency = Math.round(performance.now() - startTime);
+                valLatency.textContent = `${latency}ms`;
+                
+                if (result.success && isDetecting) {
+                    objCounter.textContent = result.count;
+                    frameCounter++;
+                    
+                    // Render HUD bounding boxes and labels with angles & clock
+                    renderHUD(result.detections);
+                    
+                    // Handle Multilingual Auditory Alerts & 3D Spatial Audio
+                    if (result.alerts && result.alerts.length > 0) {
+                        result.alerts.forEach(alertItem => {
+                            const isObj = (typeof alertItem === 'object' && alertItem !== null);
+                            const alertText = isObj ? (alertItem.text || alertItem.spoken_text) : alertItem;
+                            const spokenText = isObj ? (alertItem.spoken_text || alertItem.text) : alertItem;
+                            const isUrgent = isObj ? alertItem.is_urgent : (alertText.toLowerCase().includes('very close') || alertText.includes('Warning') || alertText.includes('सावधान') || alertText.includes('ସାବଧାନ'));
+                            const pan = isObj ? (alertItem.pan || 0.0) : 0.0;
+                            const dist = isObj ? (alertItem.distance || 2.0) : 2.0;
+
+                            logEvent(`AUDIO ALERT: ${alertText}`, false, isUrgent);
+                            
+                            // 3D Spatial Stereo Panning (offline Web Audio API pulse to left/right ear)
+                            window.CrossEchoVoice.playDirectionalPulse(pan, dist, isUrgent);
+                            
+                            if (isUrgent) {
+                                window.CrossEchoVoice.playChime('danger');
+                                window.CrossEchoVoice.speak(spokenText, { priority: 'urgent', flush: true, lang: result.language });
+                            } else {
+                                window.CrossEchoVoice.speak(spokenText, { priority: 'high', cooldown: 3200, lang: result.language });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                console.debug("Inference error:", e);
+            } finally {
+                inferenceInProgress = false;
+            }
+        }
+        
+        // Schedule next inference tick (120ms interval for smooth real-time response)
+        if (isDetecting) {
+            setTimeout(processInferenceLoop, 120);
+        }
+    }
+    
+    function renderHUD(detections) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!detections || detections.length === 0) return;
+        
+        detections.forEach(det => {
+            const [x1, y1, x2, y2] = det.box;
+            const width = x2 - x1;
+            const height = y2 - y1;
+            const dist = det.distance;
+            
+            // Urgency color assignment
+            let color = '#38bdf8'; // Cyan default
+            let isUrgent = false;
+            
+            if (dist > 0 && dist < 1.2) {
+                color = '#ef4444'; // Red danger
+                isUrgent = true;
+            } else if (dist > 0 && dist < 2.5) {
+                color = '#f59e0b'; // Amber close
+            } else if (['person', 'car', 'bus', 'truck', 'motorcycle'].includes(det.label)) {
+                color = '#60a5fa'; // Blue priority vehicle/human
+            } else if (['mobile phone', 'cell phone', 'phone', 'laptop', 'tv', 'remote'].includes(det.label)) {
+                color = '#10b981'; // Emerald for electronics & mobile phones
+            } else if (['sofa', 'couch', 'chair', 'bed', 'table', 'dining table'].includes(det.label)) {
+                color = '#a855f7'; // Purple for furniture & sofas
+            }
+            
+            // Draw bounding box corners / rect
+            ctx.strokeStyle = color;
+            ctx.lineWidth = isUrgent ? 3.5 : 2.5;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = isUrgent ? 14 : 8;
+            ctx.strokeRect(x1, y1, width, height);
+            
+            // Corner Reticles for high-tech HUD feel
+            const cornerLen = Math.min(16, width / 4, height / 4);
+            ctx.lineWidth = 4;
+            // Top-left
+            ctx.beginPath();
+            ctx.moveTo(x1, y1 + cornerLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 + cornerLen, y1);
+            // Top-right
+            ctx.moveTo(x2 - cornerLen, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + cornerLen);
+            // Bottom-left
+            ctx.moveTo(x1, y2 - cornerLen); ctx.lineTo(x1, y2); ctx.lineTo(x1 + cornerLen, y2);
+            // Bottom-right
+            ctx.moveTo(x2 - cornerLen, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - cornerLen);
+            ctx.stroke();
+            
+            ctx.shadowBlur = 0; // Reset blur for text
+            
+            // Tag label pill with object name, confidence, distance, granular direction, angle and clock
+            let labelText = `${det.label.toUpperCase()} (${Math.round(det.confidence * 100)}%)`;
+            if (dist > 0) labelText += ` | ${dist}m`;
+            labelText += ` | ${det.direction}`;
+            if (det.clock) labelText += ` [${det.clock}]`;
+            if (det.angle !== undefined && det.angle !== null) {
+                labelText += ` (${det.angle > 0 ? '+' : ''}${det.angle}°)`;
+            }
+            
+            ctx.font = 'bold 12px "JetBrains Mono", monospace';
+            const textWidth = ctx.measureText(labelText).width;
+            
+            // Background pill
+            ctx.fillStyle = color;
+            ctx.fillRect(x1 - 1, Math.max(0, y1 - 22), textWidth + 14, 22);
+            
+            // Text inside pill
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(labelText, x1 + 6, Math.max(15, y1 - 6));
+            
+            // Urgent center warning flash
+            if (isUrgent) {
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+                ctx.fillRect(x1, y1, width, height);
+            }
+        });
+    }
+    
+    // Expose control functions to window for hands-free voice commands
+    window.startCameraNavigation = async function() {
+        if (!isDetecting) {
+            await startCamera();
+        } else {
+            const lang = window.CrossEchoVoice.currentLanguage;
+            const msg = {
+                'en': "Camera stream is already active.",
+                'hi': "कैमरा पहले से चालू है।",
+                'or': "କ୍ୟାମେରା ପୂର୍ବରୁ ସକ୍ରିୟ ଅଛି।"
+            };
+            window.CrossEchoVoice.speak(msg[lang] || msg['en'], { priority: 'urgent' });
+        }
+    };
+
+    window.stopCameraNavigation = function() {
+        if (isDetecting) {
+            stopCamera();
+        } else {
+            const lang = window.CrossEchoVoice.currentLanguage;
+            const msg = {
+                'en': "Camera stream is already stopped.",
+                'hi': "कैमरा पहले से बंद है।",
+                'or': "କ୍ୟାମେରା ପୂର୍ବରୁ ବନ୍ଦ ଅଛି।"
+            };
+            window.CrossEchoVoice.speak(msg[lang] || msg['en'], { priority: 'urgent' });
+        }
+    };
+
+    window.switchCameraDevice = async function() {
+        if (!cameraSelect || cameraSelect.options.length <= 1) {
+            const lang = window.CrossEchoVoice.currentLanguage;
+            let msg = "Only one camera found on this device.";
+            if (lang === 'hi') msg = "इस डिवाइस पर केवल एक कैमरा उपलब्ध है।";
+            else if (lang === 'or') msg = "ଏହି ଡିଭାଇସରେ କେବଳ ଗୋଟିଏ କ୍ୟାମେରା ଅଛି।";
+            window.CrossEchoVoice.speak(msg, { priority: 'urgent' });
+            logEvent(msg, true);
+            return;
+        }
+
+        let nextIndex = (cameraSelect.selectedIndex + 1) % cameraSelect.options.length;
+        cameraSelect.selectedIndex = nextIndex;
+        selectedDeviceId = cameraSelect.value || null;
+        const deviceLabel = cameraSelect.options[nextIndex].text || `Camera ${nextIndex + 1}`;
+
+        if (isDetecting) {
+            stopCamera();
+            await startCamera();
+        }
+
+        const lang = window.CrossEchoVoice.currentLanguage;
+        let announcement = `Switched camera to ${deviceLabel}`;
+        if (lang === 'hi') announcement = `कैमरा बदलकर ${deviceLabel} कर दिया गया`;
+        else if (lang === 'or') announcement = `କ୍ୟାମେରା ବଦଳାଗଲା ${deviceLabel}`;
+
+        window.CrossEchoVoice.speak(announcement, { priority: 'urgent', flush: true, lang: lang });
+        logEvent(`VOICE COMMAND: Switched default camera to ${deviceLabel}`);
+    };
+
+    // Keybinds: Space toggles camera on this page
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+            e.preventDefault();
+            if (isDetecting) stopCamera();
+            else startCamera();
+        }
+    });
+
+    btnStart.addEventListener('click', startCamera);
+    btnStop.addEventListener('click', stopCamera);
+</script>
+{% endblock %}

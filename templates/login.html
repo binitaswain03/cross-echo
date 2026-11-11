@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% block title %}Sign In - CrossEcho{% endblock %}
+
+{% block content_no_sidebar %}
+<!-- Visually hidden accessible focus trap to initiate speech if the browser blocks autoplay -->
+<button id="start-voice" class="sr-only" tabindex="1" aria-label="Press Enter to start voice guidance for login.">
+    Start Voice Guidance
+</button>
+
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+    <div class="glass-panel" style="width: 100%; max-width: 450px; padding: 3rem;" role="main" aria-label="Login Form">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <div class="logo-icon" style="margin: 0 auto 1rem; width: 48px; height: 48px; font-size: 1.25rem;" aria-hidden="true">CE</div>
+            <h2 style="font-size: 1.75rem;" id="login-heading">Welcome Back</h2>
+            <p class="text-muted" style="margin-top: 0.5rem;" aria-hidden="true">Enter your credentials to access the console.</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('auth.login') }}" id="login-form">
+            <div class="form-group">
+                <label class="form-label" for="username_input">Username or Email</label>
+                <input type="text" id="username_input" name="username_or_email" class="form-control a11y-speak" 
+                       required placeholder="operator@crossecho.ai" tabindex="2"
+                       aria-labelledby="login-heading" aria-label="Enter your username or email"
+                       data-speak="Username or Email field. Please type your credentials.">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label class="form-label" for="password_input">Password</label>
+                <input type="password" id="password_input" name="password" class="form-control a11y-speak" 
+                       required placeholder="••••••••" tabindex="3"
+                       aria-label="Enter your password"
+                       data-speak="Password field. Type your password securely.">
+            </div>
+            
+            <button type="submit" class="btn btn-primary a11y-speak" style="width: 100%; justify-content: center; padding: 0.85rem;" 
+                    tabindex="4" data-speak="Sign In button. Press Enter to submit.">
+                Sign In <i data-lucide="arrow-right" size="18" aria-hidden="true"></i>
+            </button>
+        </form>
+        
+        <p style="text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--text-muted);">
+            Don't have an operator ID? 
+            <a href="{{ url_for('auth.register') }}" class="a11y-speak" tabindex="5"
+               style="color: var(--color-primary); text-decoration: none; font-weight: 600;"
+               data-speak="Register link. Press Enter to go to the registration page.">
+                Register here
+            </a>
+        </p>
+    </div>
+</div>
+
+<style>
+    /* Visually hide the button but keep it accessible for screen readers and keyboard focus */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+    .sr-only:focus {
+        position: static;
+        width: auto;
+        height: auto;
+        padding: 1rem;
+        background: var(--color-primary);
+        color: #fff;
+        z-index: 1000;
+        border-radius: 8px;
+        outline: 3px solid #fff;
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const synth = window.speechSynthesis;
+    let hasGreeted = false;
+    let voiceModeActive = false;
+    let currentVoiceStep = 0; // 0: off, 1: username, 2: password, 3: confirm
+    
+    // Setup Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript.trim();
+            handleVoiceInput(transcript);
+        };
+        
+        recognition.onerror = function(event) {
+            console.error("Speech recognition error:", event.error);
+            if (voiceModeActive && event.error !== 'no-speech') {
+                speak("I didn't catch that. Please try again.", () => {
+                    recognition.start();
+                });
+            }
+        };
+    }
+
+    function speak(text, onEndCallback = null) {
+        if (synth.speaking) {
+            synth.cancel();
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.1; 
+        utterance.pitch = 1.0;
+        if (onEndCallback) {
+            utterance.onend = onEndCallback;
+        }
+        synth.speak(utterance);
+    }
+
+    // Auto-greeting attempt
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('voice') === 'true') {
+                speak("Welcome to Cross Echo Login.", () => {
+                    setTimeout(() => startVoiceWizard(), 500);
+                });
+            } else {
+                speak("Welcome to Cross Echo Login. Press the Spacebar at any time to start voice input, or press Tab to navigate fields.");
+            }
+        }, 1000);
+    });
+
+    document.getElementById('start-voice').addEventListener('focus', () => {
+        if (!hasGreeted) {
+            speak("Voice guidance activated. Press the Spacebar to start voice input, or press Tab to navigate manually.");
+            hasGreeted = true;
+        }
+    });
+
+    document.querySelectorAll('.a11y-speak').forEach(el => {
+        el.addEventListener('focus', (e) => {
+            if (voiceModeActive) return; // Don't interfere if voice mode is running
+            const textToSpeak = e.target.getAttribute('data-speak');
+            if(textToSpeak) speak(textToSpeak);
+        });
+    });
+    
+    // Voice Flow Logic
+    window.addEventListener('keydown', (e) => {
+        // Start voice mode if Spacebar is pressed and not currently typing in an input
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            if (!recognition) {
+                speak("Speech recognition is not supported in this browser.");
+                return;
+            }
+            if (!voiceModeActive) {
+                startVoiceWizard();
+            }
+        }
+    });
+    
+    function startVoiceWizard() {
+        voiceModeActive = true;
+        currentVoiceStep = 1;
+        speak("Voice input started. Please say your username or email.", () => {
+            try { recognition.start(); } catch(e) {}
+        });
+    }
+    
+    function handleVoiceInput(text) {
+        let cleanText = text.toLowerCase().replace(/\bat\b/g, '@').replace(/\bdot\b/g, '.').replace(/\s+/g, ''); 
+        
+        if (cleanText === 'restart' || cleanText === 'startover') {
+            startVoiceWizard();
+            return;
+        }
+        
+        if (currentVoiceStep === 1) {
+            document.getElementById('username_input').value = cleanText;
+            currentVoiceStep = 2;
+            speak(`Username set to ${text}. Please say your password.`, () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        } else if (currentVoiceStep === 2) {
+            document.getElementById('password_input').value = cleanText;
+            currentVoiceStep = 3;
+            speak("Password set. Say 'login' to submit, or 'restart' to try again.", () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        } else if (currentVoiceStep === 3) {
+            if (cleanText.includes('login') || cleanText.includes('submit')) {
+                speak("Logging in.");
+                setTimeout(() => {
+                    document.getElementById('login-form').submit();
+                }, 1000);
+            } else {
+                speak("I didn't understand. Say 'login' to submit, or 'restart' to try again.", () => {
+                    try { recognition.start(); } catch(e) {}
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}

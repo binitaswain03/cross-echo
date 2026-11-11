@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+{% block title %}Operations Dashboard - CrossEcho{% endblock %}
+{% block page_heading %}Operations & Accessibility Console{% endblock %}
+{% block page_subheading %}Operator ID: CE-X8-{{ user.id }} | System: Spatial AI Online | Connection: Active{% endblock %}
+
+{% block content %}
+<!-- Accessibility & Voice Guidance Toolbar -->
+<section class="voice-toolbar" aria-label="Audio Guidance & Accessibility Controls">
+    <div class="voice-toolbar-left">
+        <div class="voice-status-badge" id="voice-guide-status" aria-live="polite">
+            <span class="pulse-dot"></span>
+            <span id="voice-guide-text">Screen Reader Active</span>
+        </div>
+        <button id="btn-toggle-voice-guide" class="btn btn-secondary" onclick="window.CrossEchoVoice.toggleVoice()" aria-label="Toggle Voice Assistant (Shortcut: M)" data-speech="Toggle voice assistance. Press M to mute or unmute.">
+            <i id="voice-guide-btn-icon" data-lucide="volume-2"></i>
+            <span id="voice-guide-btn-text">Voice Guide: Active</span>
+        </button>
+        <button id="btn-toggle-mic" class="btn btn-secondary" onclick="window.CrossEchoVoice.toggleSpeechRecognition()" aria-label="Toggle Voice Commands (Shortcut: V)" data-speech="Voice command recognition toggle. Press V to speak commands.">
+            <i id="voice-mic-icon" data-lucide="mic"></i>
+            <span id="voice-mic-text">Voice Command: Active</span>
+        </button>
+        <button class="btn btn-secondary" onclick="window.CrossEchoVoice.readPageSummary()" aria-label="Read Dashboard Summary Aloud (Shortcut: S)" data-speech="Read dashboard summary aloud. Press S.">
+            <i data-lucide="speech"></i>
+            <span>Read Summary (S)</span>
+        </button>
+        <span id="voice-command-pill" class="voice-command-pill" style="display: none;" aria-live="assertive"></span>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <!-- Language Selector -->
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="dashboard-language-select" style="font-size: 0.85rem; color: var(--text-muted);"><i data-lucide="languages" size="14"></i> Audio:</label>
+            <select id="dashboard-language-select" class="form-control language-select" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem; background: rgba(0,0,0,0.5); border: 1px solid var(--border-light); color: #38bdf8; font-weight: 600; border-radius: 8px;" onchange="window.CrossEchoVoice.setLanguage(this.value)" aria-label="Select Voice Guidance Language">
+                <option value="en">English (Default)</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+                <option value="or">ଓଡ଼ିଆ (Odia)</option>
+            </select>
+        </div>
+
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
+            <i data-lucide="keyboard" size="14" style="vertical-align: middle;"></i> Shortcuts: [Space] HUD | [V] Mic | [C] Cam | [L] Lang | [S] Summary | [M] Mute
+        </span>
+    </div>
+</section>
+
+<!-- Hero Navigation Launch Card -->
+<div class="hero-nav-card" role="region" aria-label="Live Assistive Navigation Quick Access">
+    <div>
+        <div style="display: inline-flex; align-items: center; gap: 0.5rem; color: #38bdf8; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.5rem;">
+            <i data-lucide="zap" size="16"></i> Real-Time Assistive Mode
+        </div>
+        <h2 style="font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;">Cross-Modal Camera Navigation HUD</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 580px;">
+            Activate your webcam for instant YOLOv8 object localization, MiDaS monocular depth estimation, and 3D prioritized voice synthesis alerts.
+        </p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-end;">
+        <a href="{{ url_for('main.detection') }}" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.05rem; background: linear-gradient(135deg, #2563eb, #06b6d4); border: none;" data-speech="Launch live camera navigation. Press Space or N to start." aria-label="Start Live Camera Navigation HUD (Press Space or N)">
+            <i data-lucide="camera" size="20"></i> Start Navigation (Space)
+        </a>
+        <span style="font-size: 0.8rem; color: #94a3b8;">Supports USB, external & laptop webcams</span>
+    </div>
+</div>
+
+<!-- Metrics Grid -->
+<div class="metrics-grid" role="region" aria-label="Navigation Metrics">
+    <div class="metric-card" tabindex="0" role="region" aria-label="Total Logs: {{ stats.total_detections }} recorded" data-speech="Total logged detections: {{ stats.total_detections }}">
+        <div>
+            <div class="metric-value" data-stat="total" id="stat-total">{{ stats.total_detections }}</div>
+            <div class="metric-label">Total Logs</div>
+        </div>
+        <div class="metric-icon" style="color: var(--color-primary); background: rgba(59, 130, 246, 0.15);">
+            <i data-lucide="database"></i>
+        </div>
+    </div>
+    
+    <div class="metric-card" tabindex="0" role="region" aria-label="Today's Scans: {{ stats.today_detections }} detections recorded today" data-speech="Today's scans: {{ stats.today_detections }}">
+        <div>
+            <div class="metric-value" style="color: var(--color-success);" data-stat="today" id="stat-today">{{ stats.today_detections }}</div>
+            <div class="metric-label">Today's Scans</div>
+        </div>
+        <div class="metric-icon" style="color: var(--color-success); background: rgba(16, 185, 129, 0.15);">
+            <i data-lucide="activity"></i>
+        </div>
+    </div>
+    
+    <div class="metric-card" tabindex="0" role="region" aria-label="Dominant Threat: {{ stats.top_object }}" data-speech="Dominant obstacle detected most frequently: {{ stats.top_object }}">
+        <div>
+            <div class="metric-value" style="color: var(--color-warning); font-size: 1.4rem;" data-stat="top" id="stat-top">{{ stats.top_object }}</div>
+            <div class="metric-label">Dominant Obstacle</div>
+        </div>
+        <div class="metric-icon" style="color: var(--color-warning); background: rgba(245, 158, 11, 0.15);">
+            <i data-lucide="target"></i>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 360px; gap: 2rem;">
+    <!-- Recent Logs Table -->
+    <div class="glass-panel" style="padding: 1.5rem;" role="region" aria-label="Recent Detections Table">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i data-lucide="list" style="color: var(--color-primary);"></i> Recent Spatial Detections
+            </h3>
+            <button class="btn btn-secondary" onclick="refreshDashboardData()" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" aria-label="Refresh Table Data" data-speech="Refreshing recent detection records">
+                <i data-lucide="refresh-cw" size="14"></i> Refresh
+            </button>
+        </div>
+        
+        <div style="overflow-x: auto;">
+            <table class="cyber-table" role="table" aria-label="Table of recent obstacle detections">
+                <thead>
+                    <tr>
+                        <th scope="col">Object</th>
+                        <th scope="col">Accuracy</th>
+                        <th scope="col">Distance</th>
+                        <th scope="col">Direction</th>
+                        <th scope="col">Time</th>
+                        <th scope="col">Audio</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-detections-table">
+                    {% for log in recent_detections %}
+                    <tr tabindex="0" data-speech="Object: {{ log.object_name }}, confidence {{ (log.confidence * 100)|round(1) }}%, distance {% if log.distance and log.distance > 0 %}{{ log.distance }} meters{% else %}unknown{% endif %}, on {{ log.direction or 'Center' }}">
+                        <td style="font-weight: 600; text-transform: capitalize;">
+                            <i data-lucide="crosshair" size="14" style="color: var(--color-primary); vertical-align: middle; margin-right: 0.35rem;"></i>
+                            {{ log.object_name }}
+                        </td>
+                        <td class="text-muted">{{ (log.confidence * 100)|round(1) }}%</td>
+                        <td>
+                            {% if log.distance and log.distance > 0 %}
+                                {% if log.distance < 1.2 %}
+                                    <span class="badge badge-urgent">{{ log.distance }}m Close</span>
+                                {% elif log.distance < 2.5 %}
+                                    <span class="badge badge-warning">{{ log.distance }}m</span>
+                                {% else %}
+                                    <span class="badge badge-success">{{ log.distance }}m</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.direction and 'Left' in log.direction %}
+                                <span class="badge badge-warning"><i data-lucide="arrow-left" size="12"></i> {{ log.direction }}</span>
+                            {% elif log.direction and 'Right' in log.direction %}
+                                <span class="badge badge-success"><i data-lucide="arrow-right" size="12"></i> {{ log.direction }}</span>
+                            {% else %}
+                                <span class="badge badge-primary"><i data-lucide="move" size="12"></i> {{ log.direction or 'Ahead' }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted text-sm" style="font-family: var(--font-mono);">{{ log.timestamp.strftime('%H:%M:%S') }}</td>
+                        <td>
+                            <button class="btn-audio-speak" onclick="window.CrossEchoVoice.speak('{{ log.object_name }} at {% if log.distance and log.distance > 0 %}{{ log.distance }} meters{% else %}an unknown distance{% endif %} on {{ log.direction or 'Center' }}', {flush: true, priority: 'high'})" aria-label="Listen to {{ log.object_name }} detection audio" data-speech="Listen to {{ log.object_name }} detection">
+                                <i data-lucide="volume-2" size="12"></i> Speak
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr id="no-detections-row">
+                        <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-dark);">
+                            <i data-lucide="inbox" size="28" style="display: block; margin: 0 auto 0.5rem; opacity: 0.5;"></i>
+                            No detections recorded yet. Start camera navigation to populate logs.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Charts and Stats -->
+    <div style="display: flex; flex-direction: column; gap: 2rem;">
+        <div class="glass-panel" style="padding: 1.5rem;" role="region" aria-label="Obstacle Distribution Chart">
+            <h3 style="margin-bottom: 1.25rem; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i data-lucide="pie-chart" style="color: var(--color-secondary);"></i> Detection Frequency
+            </h3>
+            <canvas id="objectsChart" width="300" height="300" aria-label="Doughnut chart displaying detected obstacle frequencies" role="img"></canvas>
+            
+            <!-- Accessible Text Breakdown for Screen Readers -->
+            <div id="frequency-list" style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto;">
+                {% for obj_name, cnt in stats.object_counts.items() %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.02); border-radius: 8px;" tabindex="0" data-speech="{{ obj_name }}: detected {{ cnt }} times">
+                    <span style="text-transform: capitalize; color: #e2e8f0; font-size: 0.9rem;">{{ obj_name }}</span>
+                    <span class="badge badge-primary">{{ cnt }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const objCounts = {{ stats.object_counts | tojson }};
+    const labels = Object.keys(objCounts);
+    const data = Object.values(objCounts);
+    
+    const chartCtx = document.getElementById('objectsChart').getContext('2d');
+    let chartInstance = new Chart(chartCtx, {
+        type: 'doughnut',
+        data: {
+            labels: labels.length ? labels : ['No Data'],
+            datasets: [{
+                data: data.length ? data : [1],
+                backgroundColor: [
+                    '#3b82f6', '#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'
+                ],
+                borderWidth: 2,
+                borderColor: '#1a1d2d',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { 
+                    position: 'bottom', 
+                    labels: { color: '#94a3b8', font: { family: "'Inter', sans-serif" } } 
+                }
+            },
+            cutout: '70%'
+        }
+    });
+
+    // Real-time synchronization with /api/stats
+    function refreshDashboardData() {
+        fetch('/api/stats')
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) return;
+                
+                // Update metric counters
+                document.getElementById('stat-total').textContent = res.stats.total_detections;
+                document.getElementById('stat-today').textContent = res.stats.today_detections;
+                document.getElementById('stat-top').textContent = res.stats.top_object;
+                
+                // Update table
+                const tbody = document.getElementById('recent-detections-table');
+                if (res.recent && res.recent.length > 0) {
+                    tbody.innerHTML = '';
+                    res.recent.forEach(r => {
+                        const tr = document.createElement('tr');
+                        tr.tabIndex = 0;
+                        const distText = (r.distance && r.distance > 0) ? `${r.distance}m` : 'N/A';
+                        tr.setAttribute('data-speech', `Object: ${r.object_name}, confidence ${(r.confidence * 100).toFixed(1)}%, distance ${distText}, on ${r.direction || 'Center'}`);
+                        
+                        let distBadge = `<span class="text-muted">N/A</span>`;
+                        if (r.distance && r.distance > 0) {
+                            if (r.distance < 1.2) distBadge = `<span class="badge badge-urgent">${r.distance}m Close</span>`;
+                            else if (r.distance < 2.5) distBadge = `<span class="badge badge-warning">${r.distance}m</span>`;
+                            else distBadge = `<span class="badge badge-success">${r.distance}m</span>`;
+                        }
+
+                        let dirBadge = `<span class="badge badge-primary"><i data-lucide="move" size="12"></i> ${r.direction || 'Ahead'}</span>`;
+                        if (r.direction && r.direction.includes('Left')) {
+                            dirBadge = `<span class="badge badge-warning"><i data-lucide="arrow-left" size="12"></i> ${r.direction}</span>`;
+                        } else if (r.direction && r.direction.includes('Right')) {
+                            dirBadge = `<span class="badge badge-success"><i data-lucide="arrow-right" size="12"></i> ${r.direction}</span>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td style="font-weight: 600; text-transform: capitalize;">
+                                <i data-lucide="crosshair" size="14" style="color: var(--color-primary); vertical-align: middle; margin-right: 0.35rem;"></i>
+                                ${r.object_name}
+                            </td>
+                            <td class="text-muted">${(r.confidence * 100).toFixed(1)}%</td>
+                            <td>${distBadge}</td>
+                            <td>${dirBadge}</td>
+                            <td class="text-muted text-sm" style="font-family: var(--font-mono);">${r.timestamp}</td>
+                            <td>
+                                <button class="btn-audio-speak" onclick="window.CrossEchoVoice.speak('${r.object_name} at ${distText} on ${r.direction || 'Center'}', {flush: true, priority: 'high'})">
+                                    <i data-lucide="volume-2" size="12"></i> Speak
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    lucide.createIcons();
+                }
+            })
+            .catch(e => console.error("Stats refresh error:", e));
+    }
+
+    // Auto-refresh every 8 seconds
+    setInterval(refreshDashboardData, 8000);
+</script>
+{% endblock %}

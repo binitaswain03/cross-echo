@@ -1,0 +1,224 @@
+{% extends 'base.html' %}
+{% block title %}Register - CrossEcho{% endblock %}
+
+{% block content_no_sidebar %}
+<!-- Visually hidden accessible focus trap to initiate speech if the browser blocks autoplay -->
+<button id="start-voice" class="sr-only" tabindex="1" aria-label="Press Enter to start voice guidance for registration.">
+    Start Voice Guidance
+</button>
+
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+    <div class="glass-panel" style="width: 100%; max-width: 450px; padding: 3rem;" role="main" aria-label="Registration Form">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <div class="logo-icon" style="margin: 0 auto 1rem; width: 48px; height: 48px; font-size: 1.25rem;" aria-hidden="true">CE</div>
+            <h2 style="font-size: 1.75rem;" id="reg-heading">Create Operator ID</h2>
+            <p class="text-muted" style="margin-top: 0.5rem;" aria-hidden="true">Register to start using the navigation system.</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('auth.register') }}" id="reg-form">
+            <div class="form-group">
+                <label class="form-label" for="username_input">Username</label>
+                <input type="text" id="username_input" name="username" class="form-control a11y-speak" 
+                       required placeholder="Pilot_01" tabindex="2"
+                       aria-labelledby="reg-heading" aria-label="Enter your desired username"
+                       data-speak="Username field. Enter your desired username.">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="email_input">Email Address</label>
+                <input type="email" id="email_input" name="email" class="form-control a11y-speak" 
+                       required placeholder="operator@crossecho.ai" tabindex="3"
+                       aria-label="Enter your email address"
+                       data-speak="Email field. Enter your email address.">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="password_input">Password</label>
+                <input type="password" id="password_input" name="password" class="form-control a11y-speak" 
+                       required placeholder="••••••••" tabindex="4"
+                       aria-label="Enter your password"
+                       data-speak="Password field. Enter a secure password.">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label class="form-label" for="confirm_input">Confirm Password</label>
+                <input type="password" id="confirm_input" name="confirm_password" class="form-control a11y-speak" 
+                       required placeholder="••••••••" tabindex="5"
+                       aria-label="Confirm your password"
+                       data-speak="Confirm Password field. Retype your password.">
+            </div>
+            
+            <button type="submit" class="btn btn-primary a11y-speak" style="width: 100%; justify-content: center; padding: 0.85rem;" 
+                    tabindex="6" data-speak="Register Account button. Press Enter to submit.">
+                Register Account <i data-lucide="user-plus" size="18" aria-hidden="true"></i>
+            </button>
+        </form>
+        
+        <p style="text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--text-muted);">
+            Already have an ID? 
+            <a href="{{ url_for('auth.login') }}" class="a11y-speak" tabindex="7"
+               style="color: var(--color-primary); text-decoration: none; font-weight: 600;"
+               data-speak="Sign in link. Press Enter to go to the login page.">
+                Sign in
+            </a>
+        </p>
+    </div>
+</div>
+
+<style>
+    /* Visually hide the button but keep it accessible for screen readers and keyboard focus */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+    .sr-only:focus {
+        position: static;
+        width: auto;
+        height: auto;
+        padding: 1rem;
+        background: var(--color-primary);
+        color: #fff;
+        z-index: 1000;
+        border-radius: 8px;
+        outline: 3px solid #fff;
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const synth = window.speechSynthesis;
+    let hasGreeted = false;
+    let voiceModeActive = false;
+    let currentVoiceStep = 0; // 0: off, 1: username, 2: email, 3: password, 4: confirm
+    
+    // Setup Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript.trim();
+            handleVoiceInput(transcript);
+        };
+        
+        recognition.onerror = function(event) {
+            console.error("Speech recognition error:", event.error);
+            if (voiceModeActive && event.error !== 'no-speech') {
+                speak("I didn't catch that. Please try again.", () => {
+                    recognition.start();
+                });
+            }
+        };
+    }
+
+    function speak(text, onEndCallback = null) {
+        if (synth.speaking) {
+            synth.cancel();
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.1; 
+        utterance.pitch = 1.0;
+        if (onEndCallback) {
+            utterance.onend = onEndCallback;
+        }
+        synth.speak(utterance);
+    }
+
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            speak("Welcome to Cross Echo Registration. Press the Spacebar at any time to start voice input, or press Tab to navigate fields.");
+        }, 1000);
+    });
+
+    document.getElementById('start-voice').addEventListener('focus', () => {
+        if (!hasGreeted) {
+            speak("Voice guidance activated. Press the Spacebar to start voice input, or press Tab to navigate manually.");
+            hasGreeted = true;
+        }
+    });
+
+    document.querySelectorAll('.a11y-speak').forEach(el => {
+        el.addEventListener('focus', (e) => {
+            if (voiceModeActive) return; // Don't interfere if voice mode is running
+            const textToSpeak = e.target.getAttribute('data-speak');
+            if(textToSpeak) speak(textToSpeak);
+        });
+    });
+    
+    // Voice Flow Logic
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            if (!recognition) {
+                speak("Speech recognition is not supported in this browser.");
+                return;
+            }
+            if (!voiceModeActive) {
+                startVoiceWizard();
+            }
+        }
+    });
+    
+    function startVoiceWizard() {
+        voiceModeActive = true;
+        currentVoiceStep = 1;
+        speak("Voice registration started. Please say your desired username.", () => {
+            try { recognition.start(); } catch(e) {}
+        });
+    }
+    
+    function handleVoiceInput(text) {
+        let cleanText = text.toLowerCase().replace(/\bat\b/g, '@').replace(/\bdot\b/g, '.').replace(/\s+/g, ''); 
+        
+        if (cleanText === 'restart' || cleanText === 'startover') {
+            startVoiceWizard();
+            return;
+        }
+        
+        if (currentVoiceStep === 1) {
+            document.getElementById('username_input').value = cleanText;
+            currentVoiceStep = 2;
+            speak(`Username set to ${text}. Please say your email address.`, () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        } else if (currentVoiceStep === 2) {
+            document.getElementById('email_input').value = cleanText;
+            currentVoiceStep = 3;
+            speak(`Email set to ${text}. Please say your password.`, () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        } else if (currentVoiceStep === 3) {
+            document.getElementById('password_input').value = cleanText;
+            document.getElementById('confirm_input').value = cleanText;
+            currentVoiceStep = 4;
+            speak("Password set. Say 'register' to create your account, or 'restart' to try again.", () => {
+                try { recognition.start(); } catch(e) {}
+            });
+        } else if (currentVoiceStep === 4) {
+            if (cleanText.includes('register') || cleanText.includes('submit')) {
+                speak("Registering account.");
+                setTimeout(() => {
+                    document.getElementById('reg-form').submit();
+                }, 1000);
+            } else {
+                speak("I didn't understand. Say 'register' to submit, or 'restart' to try again.", () => {
+                    try { recognition.start(); } catch(e) {}
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}
